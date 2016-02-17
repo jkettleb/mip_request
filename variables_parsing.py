@@ -44,14 +44,9 @@ class VariableEntry(_AttrFromDict):
         self.published = attdict.setdefault('mapping_id', "{} ({}, {})".format(*self.mip_id.split(_SEP)))
         self._attdict = attdict
 
-    def __getattr__(self, attname):
-        if attname not in self._attdict:
-            raise AttributeError('Attribute not found: {}'.format(attname))
-        else:
-            return self._attdict[attname]
-    
     @property
     def selection(self):
+        """Return the stash selections."""
         selectors = {k:v for k, v in self._attdict.iteritems() if k in self._SELECTORS}
         return ', '.join(['{}: {}'.format(k, v) for k, v in selectors.iteritems()])
     
@@ -75,23 +70,17 @@ def read_variables_dir(dname):
     return variables  
 
 
-class MappingExpression(object):
+class MappingExpression(_AttrFromDict):
     """Class representing the entries in the stash mapping table."""
     
     _TRANS = string.maketrans(' ', _SEP)
     
     def __init__(self, adict):
-        adict.pop('')
+        adict.pop('') # remove leading null column
         self._attdict = self._strip(adict)
         
     def _strip(self, adict):
         return {k[2:-2].translate(self._TRANS).lower(): v.strip() for k,v in adict.iteritems()}
-
-    def __getattr__(self, attname):
-        if attname not in self._attdict:
-            raise AttributeError()
-        else:
-            return self._attdict[attname]
         
     def for_version(self, version):
         """Return True if this expression is appropriate for version."""
@@ -115,7 +104,7 @@ class NoExpression(object):
     comment = ''
     notes = ''
 
-class MipTableVariableEntry(object):
+class MipTableVariableEntry(_AttrFromDict):
     """
     Class representing and entry from a mip table
 
@@ -146,12 +135,6 @@ class MipTableVariableEntry(object):
 
         self._attdict = adict
         
-    def __getattr__(self, attname):
-        if attname not in self._attdict:
-            raise AttributeError('Attribute not found: {}'.format(attname))
-        else:
-            return self._attdict[attname]
-
     @property       
     def is_variable(self):
         return 'modeling_realm' in self._attdict
