@@ -33,9 +33,16 @@ class VariableEntry(_AttrFromDict):
     >>> entry = VariableEntry('apm', 'sbl_1', dict(miptable='CMIP5_Lmon'))
     >>> entry.mip_id
     'CMIP5_Lmon_sbl'
+    >>> entry.min_handling
+    ''
+
+    >>> entry = VariableEntry('apm', 'pr', dict(miptable = 'CMIP5_Amon', valid_min='0', tol_min='-1.0e-7'))
+    >>> entry.min_handling
+    'valid_min: 0, tol_min: -1.0e-7'
     """
     
     _SELECTORS = ('lbproc', 'lbuser5', 'blev')
+    _MIN_HANDLING = ('valid_min', 'tol_min')
     
     def __init__(self, fname, section, attdict):
         self.stream = fname
@@ -49,7 +56,12 @@ class VariableEntry(_AttrFromDict):
         """Return the stash selections."""
         selectors = {k:v for k, v in self._attdict.iteritems() if k in self._SELECTORS}
         return ', '.join(['{}: {}'.format(k, v) for k, v in selectors.iteritems()])
-    
+
+    @property
+    def min_handling(self):
+        selectors = {k:v for k, v in self._attdict.iteritems() if k in self._MIN_HANDLING}
+        return ', '.join(['{}: {}'.format(k, v) for k, v in selectors.iteritems()])
+        
 
 def read_variables_file(fname):
     """Read the xxx_variables file returning a list of entries."""
@@ -255,6 +267,7 @@ def known_for_required(recs1, requests):
                 cmip6.attdict['Notes'] = cmip5.variable.notes
                 cmip6.attdict['Model_positive'] = cmip5.variable.positive
                 cmip6.attdict['Model_units'] = cmip5.variable.units
+                cmip6.attdict['Min_handling'] = cmip5.variable.min_handling
                 
 def known_mappings(vdir, tdir, mfile, version):
     """
@@ -275,7 +288,7 @@ def known_mappings(vdir, tdir, mfile, version):
 
 def write_csv(ofile, recs1):
     with open(ofile, 'wb') as mi:
-        fieldnames = "cmor_label,title,miptable,cf_std_name,description,cell_methods,dimension,units,positive,realm,priority,requesting_mips,UKESM_component,Owner,Variable_mapping,PP_constraint,Model_units,Model_positive,Stream,Plan,Ticket,Comment,Notes".split(',')
+        fieldnames = "cmor_label,title,miptable,cf_std_name,description,cell_methods,dimension,units,positive,realm,priority,requesting_mips,UKESM_component,Owner,Variable_mapping,PP_constraint,Model_units,Model_positive,Stream,Plan,Ticket,Comment,Notes,Min_handling".split(',')
 
         writer = csv.DictWriter(mi, fieldnames=fieldnames)
         writer.writeheader()
