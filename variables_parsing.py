@@ -10,7 +10,15 @@ _SEP='_'
 def mip_id(table, section):
     return _SEP.join((table, section))
 
-class VariableEntry(object):
+class _AttrFromDict(object):
+    
+    def __getattr__(self, attname):
+        if attname not in self._attdict:
+            raise AttributeError('Attribute not found: {}'.format(attname))
+        else:
+            return self._attdict[attname]
+    
+class VariableEntry(_AttrFromDict):
     """
     Represents an entry in a xxx_variables file.
 
@@ -30,6 +38,7 @@ class VariableEntry(object):
     _SELECTORS = ('lbproc', 'lbuser5', 'blev')
     
     def __init__(self, fname, section, attdict):
+        self.stream = fname
         clean_section = section.split(_SEP)[0] # remove any _1's or _2's
         self.mip_id = mip_id(attdict['miptable'], clean_section)
         self.published = attdict.setdefault('mapping_id', "{} ({}, {})".format(*self.mip_id.split(_SEP)))
@@ -157,12 +166,20 @@ class MipCsvVariableEntry(object):
     
     Example
     -------
-    >>> v = MipCsvVariableEntry(dict(cmor_label='tas', miptable='Amon'))
+    >>> atts = {"Notes (this doesn't)": '',
+    ...         "Comment (this goes into file metadata?)": '',
+    ...         "cmor_label": 'tas', 
+    ...         "miptable": 'Amon' }
+    >>> v = MipCsvVariableEntry(atts)
     >>> v.short_mip_id
     'Amon_tas'
 
     Will also correct 'cfsites' to 'cfSites':
-    >>> v = MipCsvVariableEntry(dict(cmor_label='tas', miptable='cfsites'))
+    >>> atts = {"Notes (this doesn't)": '',
+    ...         "Comment (this goes into file metadata?)": '',
+    ...         "cmor_label": 'tas', 
+    ...         "miptable": 'cfsites' }
+    >>> v = MipCsvVariableEntry(atts)
     >>> v.short_mip_id
     'cfSites_tas'
     """
