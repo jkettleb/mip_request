@@ -144,18 +144,6 @@ class MipTableVariableEntry(object):
         else:
             return self._attdict[attname]
 
-    def as_row(self):
-        try:
-            
-            result = (self.entry, self.long_name, self.table, self.standard_name, 'NotAvailable',
-                      self.cell_methods, self.dimensions, self.units, self.positive, self.modeling_realm,
-                      self.variable.stash_mapping, self.variable.selection, 
-                      self.variable.units, self.variable.positive, self.variable.stream)
-        except:
-            result = (self.entry, self.long_name, self.table)
-
-        return result
-
     @property       
     def is_variable(self):
         return 'modeling_realm' in self._attdict
@@ -254,34 +242,6 @@ def known_for_required(recs1, requests):
                 cmip6.attdict['Model_positive'] = cmip5.variable.positive
                 cmip6.attdict['Model_units'] = cmip5.variable.units
                 
-def write_csv(fi, requests):
-    writer = csv.writer(fi)
-    col_titles = ('cmor_label', 'title',
-                  'miptable', 'cf_std_name',
-                  'description', 'cell_methods',
-                  'dimension', 'units',
-                  'positive', 'realm',
-                  'expression', 'constraint', 
-                  'model_units', 'model_positive',
-                  'stream')
-    writer.writerow(col_titles)
-    for request in requests:
-        writer.writerow(request.as_row())
-
-def build_cmip5_table(mfile, vdir, tdir, ofile):
-    """Build and write the mapping expressions used in CMIP5."""
-    
-    with open(mfile, 'r') as mi:
-        expressions = read_stash_mapping(mi, 6.6)
-    variables = read_variables_dir(vdir)
-    expression_for_variables(variables, expressions)
-    
-    requests = read_mip_dir(tdir, 'CMIP5') # improve this CMIP5 hard coded
-    variable_for_request(requests, variables)
-
-    with open(ofile, 'wb') as fo:
-        write_csv(fo, requests)
-
 
 def fill_cmip6(mip_csv, mfile, vdir, tdir, ofile):
     with open(mfile, 'r') as mi:
@@ -310,7 +270,7 @@ def write_csv2(ofile, recs1):
             writer.writerow(rec.attdict)
                 
 def main(mfile, vdir, tdir, ofile):
-    fill_cmip6('CMIP6_data_req_20151126.csv', mfile, vdir, tdir, 'out2.csv')
+    fill_cmip6('input/CMIP6_data_req_20151126.csv', mfile, vdir, tdir, 'out2.csv')
     
 if __name__ == '__main__':
 
