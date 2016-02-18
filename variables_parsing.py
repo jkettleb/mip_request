@@ -1,5 +1,24 @@
 #!/usr/bin/env python
+"""
+Analysis to try to put forward candidate mappings for CMIP6 based
+on the CMIP5 information we have.
 
+The CMIP5 information is taken from a the sources of information
+we have.  These include:
+
+   1. The XXX_variables files.  These tell us the variables we
+      submitted, what mapping expressions where used, what 
+      filtering of the pp fields was done and any minimum
+      value handling.
+   2. The stash_mappings.txt.  This tells us the stash codes
+      and how they are used in the mapping expressions (or
+      whether the mappings expression was IDL).
+   3. The CMIP5 mip tables.  These give us standard names, cell_methods
+      etc. for the variables we submitted at CMIP5.
+
+The CMIP6 requested diagnostics are taken from a csv file created from
+the Google sheet that Alistair has put together.
+"""
 import ConfigParser
 import os
 import csv
@@ -8,10 +27,24 @@ from mip_parser import parseMipTable as mip_table_read
 
 _SEP='_'
 def mip_id(table, section):
+    """
+    Return a MIP id based on the table and section.
+
+    Examples
+    --------
+    >>> mip_id('CMIP5_Amon', 'tas')
+    'CMIP5_Amon_tas'
+
+    >>> mip_id('Lmon', 'grassFrac')
+    'Lmon_grassFrac'
+    """
     return _SEP.join((table, section))
 
 class _AttrFromDict(object):
-    
+    """
+    Base class for classes that derive their attributes from a
+    dictionary.
+    """
     def __getattr__(self, attname):
         if attname not in self._attdict:
             raise AttributeError('Attribute not found: {}'.format(attname))
@@ -51,16 +84,19 @@ class VariableEntry(_AttrFromDict):
         self.published = attdict.setdefault('mapping_id', "{} ({}, {})".format(*self.mip_id.split(_SEP)))
         self._attdict = attdict
 
+    def _gather_atts(self, attnames):
+        wanted = {k:v for k, v in self._attdict.iteritems() if k in attnames}
+        return ', '.join(['{}: {}'.format(k, v) for k, v in wanted.iteritems()])
+        
     @property
     def selection(self):
         """Return the stash selections."""
-        selectors = {k:v for k, v in self._attdict.iteritems() if k in self._SELECTORS}
-        return ', '.join(['{}: {}'.format(k, v) for k, v in selectors.iteritems()])
+        return self._gather_atts(self._SELECTORS)
 
     @property
     def min_handling(self):
-        selectors = {k:v for k, v in self._attdict.iteritems() if k in self._MIN_HANDLING}
-        return ', '.join(['{}: {}'.format(k, v) for k, v in selectors.iteritems()])
+        """Return information on whether any minimum handling is done."""
+        return self._gather_atts(self._MIN_HANDLING)
         
 
 def read_variables_file(fname):
@@ -99,6 +135,9 @@ class MappingExpression(_AttrFromDict):
         return eval('{} {}'.format(version, self.um_version))
 
 def read_stash_mapping(ifile, version):
+    """
+    Return the mappings from the stash mapping file at a model code version.
+    """
     with open(ifile, 'r') as mi:
         mapping_reader = csv.DictReader(mi, delimiter = '|')
         expressions = (MappingExpression(entry) for entry in mapping_reader)
@@ -107,7 +146,7 @@ def read_stash_mapping(ifile, version):
     return expressions
 
 
-class NoExpression(object):
+class _NoExpression(object):
     stash_mapping = ''
     selection = ''
     units = ''
@@ -140,7 +179,7 @@ class MipTableVariableEntry(_AttrFromDict):
         self.table_name = table_name
         self.mip_id = mip_id(table_name, entry)
         self.short_mip_id = mip_id(self.table, self.entry)
-        self.variable = NoExpression()
+        self.variable = _NoExpression()
        
         for attname in ('positive', 'cell_methods'):
             adict.setdefault(attname, '')
@@ -281,12 +320,15 @@ def known_mappings(vdir, tdir, mfile, version):
     variables = read_variables_dir(vdir)
     add_expression_to_variables(variables, expressions)
     
-    requests = read_mip_dir(tdir, 'CMIP5') # improve this CMIP5 hard coded
+    requests = read_mip_dir(tdir, 'CMIP5') # TODO improve this CMIP5 hard coded
     variable_for_request(requests, variables)
 
     return filter(lambda r: r.has_mapping, requests) # only CMIP5 with requests
 
 def write_csv(ofile, recs1):
+    """
+    Write the records to a csv file.
+    """
     with open(ofile, 'wb') as mi:
         fieldnames = "cmor_label,title,miptable,cf_std_name,description,cell_methods,dimension,units,positive,realm,priority,requesting_mips,UKESM_component,Owner,Variable_mapping,PP_constraint,Model_units,Model_positive,Stream,Plan,Ticket,Comment,Notes,Min_handling".split(',')
 
@@ -296,8 +338,11 @@ def write_csv(ofile, recs1):
             writer.writerow(rec.attdict)
 
 def fill_cmip6(mip_csv, mfile, vdir, tdir, ofile):
-    
-    requests = known_mappings(vdir, tdir, mfile, 6.6)
+    """
+    Coordinate the reading the known mappings from CMIP5
+    comparison with CMIP6 requests and output to file.
+    """
+    requests = known_mappings(vdir, tdir, mfile, 6.6)  #TODO better version handling
     cmip6 = read_cmip6_csv(mip_csv)
 
     known_for_required(cmip6, requests)    
