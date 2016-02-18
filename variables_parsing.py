@@ -18,7 +18,11 @@ we have.  These include:
 
 The CMIP6 requested diagnostics are taken from a csv file created from
 the Google sheet that Alistair has put together.
+
+Output is written to csv file, that is similar in format to the CMIP6
+request csv but 
 """
+
 import ConfigParser
 import os
 import csv
