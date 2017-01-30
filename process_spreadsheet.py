@@ -213,10 +213,45 @@ def check_stash(value):
         return str(value)
 
 
-def derive_time_usage_profile(sheet_period, time_period, cell_method):
+def derive_time_usage_profile(sheet_period, time_period, cell_method, dbg=True):
     """
     Derive time domain and usage domain for STASH
     Also time component of lbproc
+
+    A monthly frequency with cell_methods point has a time profile and lbproc=0
+    >>> derive_time_usage_profile('mon', ['mon'], ['time: point'], dbg=False)
+    [('TMON', 'UP5', 0)]
+
+    But a monthly frequency with a time mean will go to the same usage but
+    has a different time profile and lbproc.
+    >>> derive_time_usage_profile('mon', ['mon'], ['time: mean'], dbg=False)
+    [('TMONMN', 'UP5', 128)]
+
+    Similarly for time mins and maxs
+    >>> derive_time_usage_profile('mon', ['mon'], ['time: maximum'], dbg=False)
+    [('TMONMAX', 'UP5', 8192)]
+  
+    >>> derive_time_usage_profile('mon', ['mon'], ['time: minimum'], dbg=False)
+    [('TMONMIN', 'UP5', 4096)]
+
+    Other tables and frequencies result in different time and usage profiles
+    >>> derive_time_usage_profile('day', ['day'], ['time: point'], dbg=False)
+    [('TDAY', 'UP6', 0)]
+
+    But if the frequency is not recognised then the usage profile is set as
+    'UNKNOWN'
+    >>> derive_time_usage_profile('daily', ['daily'], ['time: point'], dbg=False)
+    [('TDAILY', 'UNKNOWN', 0)]
+
+    If cell_methods is empty then the time profile cannot be inferred
+    so is set as 'unknown'
+    >>> derive_time_usage_profile('mon', ['mon'], [''], dbg=False)
+    [('unknown', 'UP5', 0)]
+
+    Or cell_methods can have no time or area
+    >>> derive_time_usage_profile('mon', ['mon'], ['longitude:mean'], dbg=False)
+    [('unknown', 'UP5', 0)]
+
     """
     if len(time_period) != len(cell_method):
         raise Exception('Length of time periods and cell methods not the same')
@@ -235,7 +270,8 @@ def derive_time_usage_profile(sheet_period, time_period, cell_method):
         try:
             method_proc = method.split(':')[0]
             method_time = method.split(':')[1]
-            print 'method ', method, ', 1 ', method_proc, ', 2 ', method_time
+            if dbg:
+                print 'method ', method, ', 1 ', method_proc, ', 2 ', method_time
             if 'time' in method_proc:
                 if 'mean' in method_time:
                     tprof = 'T' + period.upper() + 'MN'
@@ -253,12 +289,13 @@ def derive_time_usage_profile(sheet_period, time_period, cell_method):
                 if 'point' in method:
                     tprof = 'T' + period.upper()
                     lbproc = 0
-                elif 'mean' in method:
+                elif 'mean' in method:   #TODO: check if this is correct
                     tprof = 'T' + period.upper() + 'MN'
                     lbproc = 128
             else:
                 tprof = 'unknown'
-                print 'time unknown ', method, method_proc, method_time
+                if dbg:
+                    print 'time unknown ', method, method_proc, method_time
         except:
             tprof = 'unknown'
         profile.append((tprof, usage_profile, lbproc))
@@ -272,6 +309,34 @@ def derive_domain_profile(dims):
     variable. There could be a finite number - just match all or try to be more
     clever
     CALIPSO - uses p840, p560, p220
+
+    Examples
+    --------
+
+    A simple surface field has a DIAG domain profile
+    >>> derive_domain_profile(['longitude-latitude-time'])
+    (['DIAG'], [0])
+
+    Requested diagnostics on pressure levels return an appropriate
+    pressure level domain:
+    >>> derive_domain_profile(['longitude-latitude-plev19-time'])
+    (['PLEV19'], [0])
+
+    Zonal means are supported, and update the lbproc
+    >>> derive_domain_profile(['latitude-plev19-time'])
+    (['PLEV19Z'], [64])
+
+    An 'UNKNOWN' domain profile is returned when the input domain
+    contains an unrecognised level type:
+    >>> derive_domain_profile(['longitude-latitude-theta320-time'])
+    (['UNKNOWN'], [0])
+
+    An 'UNKNOWN' is also returned when the domain is not lat-lon or
+    zonal mean
+    >>> derive_domain_profile(['time'])
+    (['UNKNOWN'], [0])
+
+
     """
     dprof = copy.copy(dims)
     d_lbproc = copy.copy(dims)
