@@ -218,6 +218,9 @@ def derive_time_usage_profile(sheet_period, time_period, cell_method, dbg=True):
     Derive time domain and usage domain for STASH
     Also time component of lbproc
 
+    Examples
+    --------
+
     A monthly frequency with cell_methods point has a time profile and lbproc=0
     >>> derive_time_usage_profile('mon', ['mon'], ['time: point'], dbg=False)
     [('TMON', 'UP5', 0)]
@@ -252,6 +255,15 @@ def derive_time_usage_profile(sheet_period, time_period, cell_method, dbg=True):
     >>> derive_time_usage_profile('mon', ['mon'], ['longitude:mean'], dbg=False)
     [('unknown', 'UP5', 0)]
 
+    The dbg argument turns on extra output:
+    >>> derive_time_usage_profile('daily', ['daily'], ['time: point'], dbg=True)
+    DBG: can not infer usage profile "daily" "daily"
+    [('TDAILY', 'UNKNOWN', 0)]
+
+    >>> derive_time_usage_profile('mon', ['mon'], ['longitude:mean'], dbg=True)
+    DBG: can not infer time profile for method "longitude:mean"
+    [('unknown', 'UP5', 0)]
+
     """
     if len(time_period) != len(cell_method):
         raise Exception('Length of time periods and cell methods not the same')
@@ -270,8 +282,6 @@ def derive_time_usage_profile(sheet_period, time_period, cell_method, dbg=True):
         try:
             method_proc = method.split(':')[0]
             method_time = method.split(':')[1]
-            if dbg:
-                print 'method ', method, ', 1 ', method_proc, ', 2 ', method_time
             if 'time' in method_proc:
                 if 'mean' in method_time:
                     tprof = 'T' + period.upper() + 'MN'
@@ -294,16 +304,19 @@ def derive_time_usage_profile(sheet_period, time_period, cell_method, dbg=True):
                     lbproc = 128
             else:
                 tprof = 'unknown'
-                if dbg:
-                    print 'time unknown ', method, method_proc, method_time
         except:
             tprof = 'unknown'
+        if dbg:
+            if tprof.lower() == 'unknown':
+                print 'DBG: can not infer time profile for method "{}"'.format(method)
+            if usage_profile.lower() == 'unknown':
+                print 'DBG: can not infer usage profile "{}" "{}"'.format(period, sheet_period.lower())
         profile.append((tprof, usage_profile, lbproc))
 
     return profile
 
 
-def derive_domain_profile(dims):
+def derive_domain_profile(dims, dbg=False):
     """
     Need to derive the appropriate domain name from the dimensions of this
     variable. There could be a finite number - just match all or try to be more
@@ -335,7 +348,11 @@ def derive_domain_profile(dims):
     zonal mean
     >>> derive_domain_profile(['time'])
     (['UNKNOWN'], [0])
-
+    
+    Turning on the dbg prints an information message:
+    >>> derive_domain_profile(['time'], dbg=True)
+    DBG: cannot infer domain from dimensions "time"
+    (['UNKNOWN'], [0])
 
     """
     dprof = copy.copy(dims)
@@ -418,7 +435,10 @@ def derive_domain_profile(dims):
                 d_lbproc[index] = 64
         else:
             dprof[index] = 'UNKNOWN'
-
+        if dbg:
+            if dprof[index].lower() == 'unknown':
+                print 'DBG: cannot infer domain from dimensions "{}"'.format(dims[index])
+    
     return dprof, d_lbproc
 
 
