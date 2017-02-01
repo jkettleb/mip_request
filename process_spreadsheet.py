@@ -29,6 +29,8 @@ import copy
 import json
 import re
 
+import iris
+
 POSSIBLE_FREQ = ['mon', 'day', '6hr', '3hr', '1hr', 'subhr']
 
 USAGE = {'amon': 'UP4',
@@ -45,6 +47,29 @@ USAGE = {'amon': 'UP4',
 sheets_to_skip = ['Oclim', 'fx']
 latest_umversion = '10.4'
 
+
+def time_method(cell_method):
+    """
+    Return the time part of the cell_method if present.
+    
+    Examples
+    --------
+    >>> time_method('longitude:mean')
+    ''
+    
+    >>> time_method('longitude: mean time: point')
+    'point'
+    
+    >>> time_method('time: mean')
+    'mean'
+    
+    """
+    result = ''
+    cell_methods = iris.fileformats.netcdf.parse_cell_methods(cell_method)
+    for cell_meth in cell_methods:
+        if 'time' in cell_meth.coord_names[0]:  #TODO what happens on multiple coord_names?
+            result = cell_meth.method
+    return result
 
 def clean_dims(dimension_name):
     """given a string dimension name remove the string "lev" and any numbers"""
@@ -252,7 +277,7 @@ def derive_time_usage_profile(sheet_period, time_period, cell_method, dbg=True):
     [('unknown', 'UP5', 0)]
 
     Or cell_methods can have no time or area
-    >>> derive_time_usage_profile('mon', ['mon'], ['longitude:mean'], dbg=False)
+    >>> derive_time_usage_profile('mon', ['mon'], ['longitude: mean'], dbg=False)
     [('unknown', 'UP5', 0)]
 
     The dbg argument turns on extra output:
@@ -260,9 +285,12 @@ def derive_time_usage_profile(sheet_period, time_period, cell_method, dbg=True):
     DBG: can not infer usage profile "daily" "daily"
     [('TDAILY', 'UNKNOWN', 0)]
 
-    >>> derive_time_usage_profile('mon', ['mon'], ['longitude:mean'], dbg=True)
-    DBG: can not infer time profile for method "longitude:mean"
+    >>> derive_time_usage_profile('mon', ['mon'], ['longitude: mean'], dbg=True)
+    DBG: can not infer time profile for method "longitude: mean"
     [('unknown', 'UP5', 0)]
+
+    >>> derive_time_usage_profile('mon', ['mon'], ['longitude: mean time: mean'], dbg=True)
+    [('TMONMN', 'UP5', 128)]
 
     """
     if len(time_period) != len(cell_method):
@@ -302,6 +330,12 @@ def derive_time_usage_profile(sheet_period, time_period, cell_method, dbg=True):
                 elif 'mean' in method:   #TODO: check if this is correct
                     tprof = 'T' + period.upper() + 'MN'
                     lbproc = 128
+            elif time_method(method) == 'mean':
+                tprof = 'T' + period.upper() + 'MN'
+                lbproc = 128
+            elif time_method(method) == 'point':
+                    tprof = 'T' + period.upper()
+                    lbproc = 0                
             else:
                 tprof = 'unknown'
         except:
