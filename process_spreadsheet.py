@@ -50,7 +50,7 @@ latest_umversion = '10.4'
 
 def time_method(cell_method):
     """
-    Return the time part of the cell_method if present.
+    Return the appropriate time part of the cell_method if present.
     
     Examples
     --------
@@ -62,13 +62,35 @@ def time_method(cell_method):
     
     >>> time_method('time: mean')
     'mean'
-    
+
+    >>> time_method('time: minimum within days time: mean over days')
+    'minimum'
+
+    >>> time_method('area: time: mean')
+    'mean'
+
+    >>> time_method('time: mean where cloud')
+    'mean'
     """
+    def _inner_time(cell_meth):
+        result = False
+        if filter(lambda x: 'time' in x, cell_meth.coord_names):
+            result = 'over' not in cell_meth.method
+        return result
+
+    def _parse_method(method):
+        if 'within' in method or 'where' in method:
+            result = method.split()[0]
+        else:
+            result = method
+        return result
+    
     result = ''
     cell_methods = iris.fileformats.netcdf.parse_cell_methods(cell_method)
     for cell_meth in cell_methods:
-        if 'time' in cell_meth.coord_names[0]:  #TODO what happens on multiple coord_names?
-            result = cell_meth.method
+        if _inner_time(cell_meth):
+            result = _parse_method(cell_meth.method)
+                
     return result
 
 def clean_dims(dimension_name):
@@ -240,7 +262,7 @@ def check_stash(value):
 
 def _derive_usage(sheet_period, period):
     usage_profile = 'UNKNOWN'
-    if period in POSSIBLE_FREQ:
+    if period in POSSIBLE_FREQ: # why can't we just look up on period?
         if period.lower() in sheet_period.lower():
             try:
                 usage_profile = USAGE[sheet_period.lower()]
@@ -257,38 +279,14 @@ def _derive_time(method, period):
                     minimum=('T{}MIN', 4096),
                     maximum=('T{}MAX', 8192))
     lbproc = 0
-    try:
-        method_proc = method.split(':')[0]
-        method_time = method.split(':')[1]
-        if period == 'hr':
-            period = '1hr'
-        if 'time' in method_proc:
-            if 'mean' in method_time:
-                tprof = 'T' + period.upper() + 'MN'
-                lbproc = 128
-            elif 'point' in method_time:
-                tprof = 'T' + period.upper()
-                lbproc = 0
-            elif 'minimum' in method_time:
-                tprof = 'T' + period.upper() + 'MIN'
-                lbproc = 4096
-            elif 'maximum' in method_time:
-                tprof = 'T' + period.upper() + 'MAX'
-                lbproc = 8192
-        elif 'area' in method_proc:
-            if 'point' in method:
-                tprof = 'T' + period.upper()
-                lbproc = 0
-            elif 'mean' in method:   #TODO: check if this is correct
-                tprof = 'T' + period.upper() + 'MN'
-                lbproc = 128
-        elif time_method(method) != '':
-            meth = time_method(method)
-            tfmt, lbproc = time_map[meth]
-            tprof = tfmt.format(period.upper())
-        else:
-            tprof = 'unknown'
-    except:
+
+    if period == 'hr': #Data request inconsistent on hr and 1hr
+        period = '1hr'
+    if time_method(method) != '':
+        meth = time_method(method)
+        tfmt, lbproc = time_map[meth]
+        tprof = tfmt.format(period.upper())
+    else:
         tprof = 'unknown'
     return tprof, lbproc
 
