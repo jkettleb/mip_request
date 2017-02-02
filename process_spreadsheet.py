@@ -274,6 +274,7 @@ def _derive_usage(sheet_period, period):
     return usage_profile
 
 def _derive_time(method, period):
+    
     time_map = dict(point=('T{}', 0),
                     mean=('T{}MN', 128),
                     minimum=('T{}MIN', 4096),
@@ -283,9 +284,12 @@ def _derive_time(method, period):
     if period == 'hr': #Data request inconsistent on hr and 1hr
         period = '1hr'
     if time_method(method) != '':
-        meth = time_method(method)
-        tfmt, lbproc = time_map[meth]
-        tprof = tfmt.format(period.upper())
+        try:
+            meth = time_method(method)
+            tfmt, lbproc = time_map[meth]
+            tprof = tfmt.format(period.upper())
+        except KeyError:
+            tprof = 'unknown'
     else:
         tprof = 'unknown'
     return tprof, lbproc
