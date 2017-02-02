@@ -238,6 +238,60 @@ def check_stash(value):
         return str(value)
 
 
+def _derive_usage(sheet_period, period):
+    usage_profile = 'UNKNOWN'
+    if period in POSSIBLE_FREQ:
+        if period.lower() in sheet_period.lower():
+            try:
+                usage_profile = USAGE[sheet_period.lower()]
+            except:
+                usage_profile = USAGE[period]
+    elif period == 'hr':  #Data request is inconsistent on hr and 1hr
+        usage_profile = USAGE['1hr']
+        
+    return usage_profile
+
+def _derive_time(method, period):
+    time_map = dict(point=('T{}', 0),
+                    mean=('T{}MN', 128),
+                    minimum=('T{}MIN', 4096),
+                    maximum=('T{}MAX', 8192))
+    lbproc = 0
+    try:
+        method_proc = method.split(':')[0]
+        method_time = method.split(':')[1]
+        if period == 'hr':
+            period = '1hr'
+        if 'time' in method_proc:
+            if 'mean' in method_time:
+                tprof = 'T' + period.upper() + 'MN'
+                lbproc = 128
+            elif 'point' in method_time:
+                tprof = 'T' + period.upper()
+                lbproc = 0
+            elif 'minimum' in method_time:
+                tprof = 'T' + period.upper() + 'MIN'
+                lbproc = 4096
+            elif 'maximum' in method_time:
+                tprof = 'T' + period.upper() + 'MAX'
+                lbproc = 8192
+        elif 'area' in method_proc:
+            if 'point' in method:
+                tprof = 'T' + period.upper()
+                lbproc = 0
+            elif 'mean' in method:   #TODO: check if this is correct
+                tprof = 'T' + period.upper() + 'MN'
+                lbproc = 128
+        elif time_method(method) != '':
+            meth = time_method(method)
+            tfmt, lbproc = time_map[meth]
+            tprof = tfmt.format(period.upper())
+        else:
+            tprof = 'unknown'
+    except:
+        tprof = 'unknown'
+    return tprof, lbproc
+
 def derive_time_usage_profile(sheet_period, time_period, cell_method, dbg=True):
     """
     Derive time domain and usage domain for STASH
@@ -292,54 +346,21 @@ def derive_time_usage_profile(sheet_period, time_period, cell_method, dbg=True):
     >>> derive_time_usage_profile('mon', ['mon'], ['longitude: mean time: mean'], dbg=True)
     [('TMONMN', 'UP5', 128)]
 
+    >>> derive_time_usage_profile('1hr', ['1hr'], ['time: point'], dbg=False)
+    [('T1HR', 'UP9', 0)]
+
+    Aliasing 1hr and hr works
+    >>> derive_time_usage_profile('hr', ['hr'], ['time: point'], dbg=False)
+    [('T1HR', 'UP9', 0)]
+
     """
     if len(time_period) != len(cell_method):
         raise Exception('Length of time periods and cell methods not the same')
 
-    lbproc = 0
     profile = []
     for period, method in zip(time_period, cell_method):
-        if period in POSSIBLE_FREQ:
-            if period.lower() in sheet_period.lower():
-                try:
-                    usage_profile = USAGE[sheet_period.lower()]
-                except:
-                    usage_profile = USAGE[period]
-        else:
-            usage_profile = 'UNKNOWN'
-        try:
-            method_proc = method.split(':')[0]
-            method_time = method.split(':')[1]
-            if 'time' in method_proc:
-                if 'mean' in method_time:
-                    tprof = 'T' + period.upper() + 'MN'
-                    lbproc = 128
-                elif 'point' in method_time:
-                    tprof = 'T' + period.upper()
-                    lbproc = 0
-                elif 'minimum' in method_time:
-                    tprof = 'T' + period.upper() + 'MIN'
-                    lbproc = 4096
-                elif 'maximum' in method_time:
-                    tprof = 'T' + period.upper() + 'MAX'
-                    lbproc = 8192
-            elif 'area' in method_proc:
-                if 'point' in method:
-                    tprof = 'T' + period.upper()
-                    lbproc = 0
-                elif 'mean' in method:   #TODO: check if this is correct
-                    tprof = 'T' + period.upper() + 'MN'
-                    lbproc = 128
-            elif time_method(method) == 'mean':
-                tprof = 'T' + period.upper() + 'MN'
-                lbproc = 128
-            elif time_method(method) == 'point':
-                    tprof = 'T' + period.upper()
-                    lbproc = 0                
-            else:
-                tprof = 'unknown'
-        except:
-            tprof = 'unknown'
+        usage_profile = _derive_usage(sheet_period, period)
+        tprof, lbproc = _derive_time(method, period)
         if dbg:
             if tprof.lower() == 'unknown':
                 print 'DBG: can not infer time profile for method "{}"'.format(method)
